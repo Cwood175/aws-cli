@@ -111,7 +111,10 @@ class CLISessionDatabaseConnection:
 
     def _ensure_host_id(self):
         cur = self.execute(self._CHECK_HOST_ID)
-        host_id_ct = cur.fetchone()[0]
+        result = cur.fetchone()
+        if result is None:
+            return
+        host_id_ct = result[0]
         if host_id_ct == 0:
             self.execute(
                 self._INSERT_HOST_ID,
