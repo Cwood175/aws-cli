@@ -109,11 +109,17 @@ class TestCLISessionDatabaseConnection:
 
     def test_timeout_does_not_raise_exception(self, session_conn):
         class FakeConnection(sqlite3.Connection):
-            def execute(self, query, *parameters):
-                # Simulate timeout by always raising.
-                raise sqlite3.OperationalError()
+            timeout_enabled = False
 
-        fake_conn = CLISessionDatabaseConnection(FakeConnection(":memory:"))
+            def execute(self, query, *parameters):
+                # Simulate timeout only once the connection is set up.
+                if self.timeout_enabled:
+                    raise sqlite3.OperationalError()
+                return super().execute(query, *parameters)
+
+        raw_conn = FakeConnection(":memory:")
+        fake_conn = CLISessionDatabaseConnection(raw_conn)
+        raw_conn.timeout_enabled = True
         cursor = fake_conn.execute(
             """
                 SELECT name
