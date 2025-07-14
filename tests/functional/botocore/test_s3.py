@@ -2207,6 +2207,7 @@ def test_retries_reuse_request_checksum(
     }
     s3 = _create_s3_client(
         retries={
+            'mode': 'standard',
             'max_attempts': 1,
         }
     )
