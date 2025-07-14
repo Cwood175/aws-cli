@@ -2198,7 +2198,7 @@ def test_retries_reuse_request_checksum(
     mock_apply_request_checksum, mock_urllib3_session_send
 ):
     # Force retry behavior.
-    mock_urllib3_session_send.side_effect = ConnectionError(error='Fake error')
+    mock_urllib3_session_send.side_effect = ConnectionError('Fake error')
     op_kwargs = {
         "Bucket": "mybucket",
         "Key": "mykey",
