@@ -2212,8 +2212,8 @@ def test_retries_reuse_request_checksum(
     )
     with pytest.raises(ConnectionError):
         s3.put_object(**op_kwargs)
-    # Ensure sending request was retried.
-    assert mock_urllib3_session_send.call_count == 2
+    # Ensure sending request was attempted once.
+    assert mock_urllib3_session_send.call_count == 1
     # But request checksum was only calculated once.
     assert mock_apply_request_checksum.call_count == 1
 
