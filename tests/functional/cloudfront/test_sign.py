@@ -16,6 +16,7 @@ import json
 import re
 
 from awscrt.crypto import EC, RSA
+from awscrt.exceptions import AwsCrtError
 from botocore.compat import parse_qs, urlparse
 from awscli.testutils import (
     BaseAWSCommandParamsTest,
@@ -140,7 +141,7 @@ class TestSign(BaseAWSCommandParamsTest):
             + self.private_key_file
             + ' --date-less-than 2016-1-1'
         )
-        
+
         crt_error = RuntimeError(
             '7174 (AWS_ERROR_CAL_UNSUPPORTED_ALGORITHM): The specified '
             'algorithm is unsupported on this platform.'
@@ -622,6 +623,9 @@ class TestSignInputValidation(BaseInputValidationTest):
             'http://example.com/hi?Key-Pair-Id=K1',
             'http://example.com/hi?Policy=x',
             'http://example.com/hi?Hash-Algorithm=SHA1',
+            # Blank values must not hide a signing parameter.
+            'http://example.com/hi?Signature=',
+            'http://example.com/hi?Expires',
         ]:
             with self.subTest(url=url):
                 self.assert_sign_error(
@@ -724,7 +728,8 @@ class TestSignKeyErrors(BaseSigningCommandTest):
 
     @skip_if_windows('The Windows CRT derives the missing EC public key.')
     def test_ec_private_key_without_public_key(self):
-        # A P-256 key exported with ``openssl ec -no_public``.
+        # A PKCS#8 P-256 key without its public key, exported with
+        # ``openssl ec -no_public | openssl pkcs8 -topk8 -nocrypt``.
         self.use_private_key(
             '-----BEGIN PRIVATE KEY-----\n'
             'MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCCtiWoCbDTjaVJiKBL+\n'
@@ -801,16 +806,27 @@ class TestSignPrivateKeyInputs(BaseSigningCommandTest):
 
 
 class TestSignSigningFailures(BaseSigningCommandTest):
-    signing_error = RuntimeError(
-        '7179 (AWS_ERROR_CAL_CRYPTO_OPERATION_FAILED): Unknown error when '
-        'calling underlying Crypto library.'
-    )
+    signing_errors = [
+        RuntimeError(
+            '7179 (AWS_ERROR_CAL_CRYPTO_OPERATION_FAILED): Unknown error '
+            'when calling underlying Crypto library.'
+        ),
+        AwsCrtError(
+            code=7179,
+            name='AWS_ERROR_CAL_CRYPTO_OPERATION_FAILED',
+            message='Unknown error when calling underlying Crypto library.',
+        ),
+    ]
 
     def assert_signing_failure(self, key_class):
-        with mock.patch.object(
-            key_class, 'sign', side_effect=self.signing_error
-        ):
-            self.assert_key_error('Failed to sign the CloudFront policy')
+        for signing_error in self.signing_errors:
+            with self.subTest(error=type(signing_error).__name__):
+                with mock.patch.object(
+                    key_class, 'sign', side_effect=signing_error
+                ):
+                    self.assert_key_error(
+                        'Failed to sign the CloudFront policy'
+                    )
 
     def test_rsa_signing_failure(self):
         self.assert_signing_failure(RSA)
