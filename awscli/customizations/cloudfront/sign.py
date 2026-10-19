@@ -227,7 +227,10 @@ class SignCommand(BaseSignCommand):
     def _get_policy_resource(self, args):
         _validate_resource(args.url, 'url', allow_wildcards=False)
         signing_params = _SIGNING_QUERY_PARAMS.intersection(
-            name for name, _ in parse_qsl(urlsplit(args.url).query)
+            name
+            for name, _ in parse_qsl(
+                urlsplit(args.url).query, keep_blank_values=True
+            )
         )
         if signing_params:
             raise ParamValidationError(
@@ -281,7 +284,8 @@ class SignCookiesCommand(BaseSignCommand):
         'application needs when setting them. A custom policy is used when '
         '--date-greater-than or --ip-address is provided, or when the '
         'resource contains a ``*`` wildcard; otherwise a canned policy is '
-        'used.'
+        'used. The set of cookies depends on the policy type and hash '
+        'algorithm, so use --query to read individual cookies in scripts.'
     )
     ARG_TABLE = [
         {
@@ -441,7 +445,7 @@ class _KeySigner:
     def sign(self, message):
         try:
             return self._sign(message)
-        except RuntimeError as e:
+        except (AwsCrtError, RuntimeError) as e:
             # The CRT error only describes the failure, never the key.
             raise ValueError(
                 f'Failed to sign the CloudFront policy with the private key: '
@@ -490,7 +494,7 @@ class RSASigner(_KeySigner):
                 self.hash_algorithm == 'SHA1'
                 and 'AWS_ERROR_CAL_UNSUPPORTED_ALGORITHM' in str(e)
             ):
-                raise RuntimeError(
+                raise ValueError(
                     "Failed to sign the URL using the SHA1 hash algorithm: "
                     f"{e} CloudFront signed URLs require RSA PKCS1 v1.5 "
                     "signing with SHA1, which may be disabled by default on "
